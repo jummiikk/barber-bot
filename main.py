@@ -1,33 +1,34 @@
 import asyncio
 import os
-import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from dotenv import load_dotenv
+import threading
 
-# Загружаем токен
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# --- Веб-сервер для Render, чтобы он не ругался на закрытый порт ---
-class SimpleHandler(BaseHTTPRequestHandler):
+# 1. Простейший веб-сервер для удержания порта Render
+class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Bot is active!")
+        self.wfile.write(b"OK")
+        
+    def log_message(self, format, *args):
+        pass  # Отключаем лишний мусор в логах
 
-def run_web_server():
+def run_server():
     port = int(os.environ.get("PORT", 10000))
-    server = HTTPServer(("0.0.0.0", port), SimpleHandler)
+    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
     server.serve_forever()
-# -----------------------------------------------------------------
 
-# Функция создания главного меню с кнопками
+# Клавиатура и хэндлеры
 def get_main_keyboard():
     builder = InlineKeyboardBuilder()
     builder.button(text="✂️ Наши услуги и цены", callback_data="services")
@@ -36,7 +37,6 @@ def get_main_keyboard():
     builder.adjust(1)
     return builder.as_markup()
 
-# Команда /start
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     welcome_text = (
@@ -46,7 +46,6 @@ async def cmd_start(message: types.Message):
     )
     await message.answer(welcome_text, reply_markup=get_main_keyboard())
 
-# Обработка кнопки "Услуги"
 @dp.callback_query(F.data == "services")
 async def show_services(callback: types.CallbackQuery):
     services_text = (
@@ -56,12 +55,9 @@ async def show_services(callback: types.CallbackQuery):
         "3. Комплекс (стрижка + борода) — 1500 сом\n"
         "4. Детская стрижка — 800 сом"
     )
-    await callback.message.edit_text(
-        services_text, reply_markup=get_main_keyboard(), parse_mode="Markdown"
-    )
+    await callback.message.edit_text(services_text, reply_markup=get_main_keyboard(), parse_mode="Markdown")
     await callback.answer()
 
-# Обработка кнопки "Контакты"
 @dp.callback_query(F.data == "contacts")
 async def show_contacts(callback: types.CallbackQuery):
     contacts_text = (
@@ -69,12 +65,9 @@ async def show_contacts(callback: types.CallbackQuery):
         "⏰ Режим работы: Ежедневно с 10:00 до 20:00\n\n"
         "📞 Телефон для связи: +996 (...)"
     )
-    await callback.message.edit_text(
-        contacts_text, reply_markup=get_main_keyboard(), parse_mode="Markdown"
-    )
+    await callback.message.edit_text(contacts_text, reply_markup=get_main_keyboard(), parse_mode="Markdown")
     await callback.answer()
 
-# Обработка кнопки "Запись"
 @dp.callback_query(F.data == "booking")
 async def start_booking(callback: types.CallbackQuery):
     await callback.message.edit_text(
@@ -83,11 +76,11 @@ async def start_booking(callback: types.CallbackQuery):
     )
     await callback.answer()
 
-# Главная функция запуска
 async def main():
-    # Запускаем веб-сервер в отдельном потоке для Render
-    server_thread = threading.Thread(target=run_web_server, daemon=True)
-    server_thread.start()
+    # Сразу запускаем веб-сервер в фоновом daemon-потоке, чтобы порт открылся мгновенно
+    t = threading.Thread(target=run_server, daemon=True)
+    t.start()
+    print("Веб-сервер для Render запущен...")
     
     print("Бот барбершопа запущен...")
     await dp.start_polling(bot)
