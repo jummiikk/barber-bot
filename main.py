@@ -48,20 +48,16 @@ async def start_booking(callback: types.CallbackQuery):
     await callback.answer()
 
 async def main():
-    # Запускаем бота
     print("Бот запущен...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    # Получаем порт от Render (или 10000 для локального запуска)
     port = int(os.environ.get("PORT", 10000))
     
-    # Запускаем FastAPI в отдельном фоновом потоке, чтобы сразу открыть порт для Render
     server_thread = threading.Thread(
         target=lambda: uvicorn.run(app, host="0.0.0.0", port=port),
         daemon=True
     )
     server_thread.start()
     
-    # Запускаем основного бота
-    asyncio.run(main())
+    asyncio.run(main()) 
