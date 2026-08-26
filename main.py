@@ -1,6 +1,8 @@
 import asyncio
 import os
-from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
+from fastapi import FastAPI
+import uvicorn
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -12,21 +14,16 @@ TOKEN = os.getenv("BOT_TOKEN")
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# Простейший веб-сервер для Render
-class HealthCheckHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Bot is alive!")
-        
-    def log_message(self, format, *args):
-        pass
+# FastAPI приложение для Render (гарантированно открывает порт)
+app = FastAPI()
 
-def run_server():
+@app.get("/")
+def health_check():
+    return {"status": "Bot is alive!"}
+
+def run_fastapi():
     port = int(os.environ.get("PORT", 10000))
-    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
-    print(f"Веб-сервер запущен на порту {port}")
-    server.serve_forever()
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
 
 # Клавиатура и хэндлеры бота
 def get_main_keyboard():
@@ -76,16 +73,14 @@ async def start_booking(callback: types.CallbackQuery):
     )
     await callback.answer()
 
-# Запускаем бота в асинхронном фоне
-async def run_bot():
+async def main():
+    # Запускаем FastAPI в фоновом потоке, чтобы порт занялся моментально
+    server_thread = threading.Thread(target=run_fastapi, daemon=True)
+    server_thread.start()
+    print("FastAPI веб-сервер запущен...")
+
     print("Бот барбершопа запущен...")
     await dp.start_polling(bot)
 
 if __name__ == "main":
-    import threading
-    # Сначала моментально поднимаем веб-сервер в отдельном потоке, но без задержек
-    server_thread = threading.Thread(target=run_server, daemon=True)
-    server_thread.start()
-    
-    # Затем запускаем бота
-    asyncio.run(run_bot())
+    asyncio.run(main() )
